@@ -1,0 +1,5 @@
+[Install PAM-DEVEL](https://mariadb.com/kb/en/installing-correct-libraries-for-pam-and-readline/)
+
+auth sufficient mypam.so
+account sufficient mypam.so
+session sufficient mypam.so

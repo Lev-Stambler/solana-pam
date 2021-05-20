@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
 
 	user = argv[1];
 
-	retval = pam_start("sober-auth", user, &conv, &pamh);
+	retval = pam_start("check_user", user, &conv, &pamh);
 
 	// Are the credentials correct?
 	if (retval == PAM_SUCCESS) {
