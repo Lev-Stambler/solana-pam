@@ -1,10 +1,27 @@
 //! Program state processor
+use crate::instruction::{unpack_user_access_list, ProgInstruction, UserAccessList};
 
 use solana_program::{
-    account_info::AccountInfo, entrypoint::ProgramResult, msg, program_error::ProgramError,
+    account_info::{next_account_info, AccountInfo},
+    entrypoint::ProgramResult,
+    msg,
+    program_error::ProgramError,
     pubkey::Pubkey,
 };
 use std::str::from_utf8;
+
+fn process_update_access_list(
+    program_account: &AccountInfo,
+    access_list_data: &mut [u8],
+    signer: &Pubkey,
+) -> ProgramResult {
+    unpack_user_access_list(access_list_data);
+    Ok(())
+}
+
+fn process_init() -> ProgramResult {
+    Ok(())
+}
 
 /// Instruction processor
 pub fn process_instruction(
@@ -14,24 +31,38 @@ pub fn process_instruction(
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     let mut missing_required_signature = false;
-    for account_info in account_info_iter {
-        if let Some(address) = account_info.signer_key() {
-            msg!("Signed by {:?}", address);
-        } else {
-            missing_required_signature = true;
-        }
-    }
+    let program_account = next_account_info(account_info_iter)?;
+    // for account_info in account_info_iter {
+    //     if let Some(address) = account_info.signer_key() {
+    //         msg!("Signed by {:?}", address);
+    //     } else {
+    //         missing_required_signature = true;
+    //     }
+    // }
     if missing_required_signature {
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    let memo = from_utf8(input).map_err(|err| {
-        msg!("Invalid UTF-8, from byte {}", err.valid_up_to());
-        ProgramError::InvalidInstructionData
-    })?;
-    msg!("Memo (len {}): {:?}", memo.len(), memo);
+    let instr = ProgInstruction::unpack(input)?;
+    match instr {
+        ProgInstruction::UpdateAccessList => {
+            let update = next_account_info(account_info_iter)?;
+            if let Some(address) = &update.signer_key() {
+                let access_list_data = update.data.into_inner();
+                process_update_access_list(program_account, access_list_data, address)
+            } else {
+                Err(ProgramError::Custom(111))
+            }
+        }
+        ProgInstruction::Init => process_init(),
+    }
+    // let memo = from_utf8(input).map_err(|err| {
+    //     msg!("Invalid UTF-8, from byte {}", err.valid_up_to());
+    //     ProgramError::InvalidInstructionData
+    // })?;
+    // msg!("Memo (len {}): {:?}", memo.len(), memo);
 
-    Ok(())
+    // Ok(())
 }
 
 #[cfg(test)]
