@@ -3,7 +3,7 @@ use borsh::maybestd::collections::HashMap;
 use borsh::{BorshDeserialize, BorshSerialize};
 use core::mem::transmute;
 use solana_program::{entrypoint::ProgramResult, msg, program_error::ProgramError, pubkey::Pubkey};
-use std::convert::TryInto;
+use std::{convert::TryInto, ops::Deref};
 
 use std::str::FromStr;
 
@@ -30,13 +30,16 @@ impl ProgramData {
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum ProgInstruction {
-    Init = 0,
+    Init,
     /// UpdateAccessList updates the access list for the caller
     ///
     /// Accounts expected
     /// program_account (W) - program state account
     /// new_access_list - an account with the caller's updated access list
     UpdateAccessList,
+    // TODO: bulk operations
+    AddPKToAccessListAccount(Pubkey),
+    RemovePKToAccessListAccount(Pubkey),
 }
 
 impl ProgInstruction {
@@ -44,6 +47,18 @@ impl ProgInstruction {
         match input[0] {
             0 => Ok(ProgInstruction::Init),
             1 => Ok(ProgInstruction::UpdateAccessList),
+            2 => {
+                let pk = &input[1..33];
+                Ok(ProgInstruction::AddPKToAccessListAccount(
+                    Pubkey::new_from_array(pk.try_into().unwrap()),
+                ))
+            }
+            3 => {
+                let pk = &input[1..33];
+                Ok(ProgInstruction::RemovePKToAccessListAccount(
+                    Pubkey::new_from_array(pk.try_into().unwrap()),
+                ))
+            }
             _ => Err(ProgramError::Custom(11)),
         }
     }
@@ -69,4 +84,21 @@ pub fn unpack_user_access_list(input: &mut [u8]) -> Result<UserAccessList, Progr
             .collect();
         Ok(keys)
     }
+}
+
+pub fn user_access_list_add_pk(mut access_list: UserAccessList, add: Pubkey) -> ProgramResult {
+    if access_list.iter().find(|pk| pk.deref().eq(&add)) == None {
+        access_list.push(add);
+    }
+    Ok(())
+}
+
+pub fn user_access_list_remove_pk(
+    mut access_list: UserAccessList,
+    remove: Pubkey,
+) -> ProgramResult {
+    if let Some(idx) = access_list.iter().position(|&r| r.eq(&remove)) {
+        access_list.remove(idx);
+    }
+    Ok(())
 }
