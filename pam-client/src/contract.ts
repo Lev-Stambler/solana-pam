@@ -12,9 +12,11 @@ import {
 enum Instruction {
   init = 0,
   updateAccessList = 1,
+  addToAccessList = 2,
+  removeToAccessList = 2,
 }
-const instrData = (instr: Instruction): Buffer => {
-  return Buffer.from([instr]);
+const instrData = (instr: Instruction, data: number[] = []): Buffer => {
+  return Buffer.from([instr, ...data]);
 };
 
 export const getContract = (
@@ -33,6 +35,50 @@ export const getContract = (
         data: instrData(Instruction.init),
       });
     },
+    removeFromAccessList: (
+      progDataAccount: PublicKey,
+      accessListPk: PublicKey,
+      remove: PublicKey
+    ) => {
+      return new TransactionInstruction({
+        keys: [
+          {
+            pubkey: progDataAccount,
+            isSigner: false,
+            isWritable: false,
+          },
+          {
+            pubkey: accessListPk,
+            isSigner: true,
+            isWritable: true,
+          },
+        ],
+        programId,
+        data: instrData(Instruction.removeToAccessList, [...remove.toBytes()]),
+      });
+    },
+    addToAccessListTx: (
+      progDataAccount: PublicKey,
+      accessListPk: PublicKey,
+      add: PublicKey
+    ) => {
+      return new TransactionInstruction({
+        keys: [
+          {
+            pubkey: progDataAccount,
+            isSigner: false,
+            isWritable: false,
+          },
+          {
+            pubkey: accessListPk,
+            isSigner: true,
+            isWritable: true,
+          },
+        ],
+        programId,
+        data: instrData(Instruction.addToAccessList, [...add.toBytes()]),
+      });
+    },
     updateAccessListTx: (
       progDataAccount: PublicKey,
       newAccessListAccount: PublicKey
@@ -47,7 +93,7 @@ export const getContract = (
           {
             pubkey: newAccessListAccount,
             isSigner: true,
-            isWritable: true,
+            isWritable: false,
           },
         ],
         programId,
@@ -57,21 +103,18 @@ export const getContract = (
     // TODO: change to init access list account
     // add functionality to add Pubkey user
     // add functionality to remove Pubkey user
-    createAccessListAccount: (pks: PublicKey[], access_list_pk?: PublicKey) => {
+    createAccessListAccountTx: (pks: PublicKey[]) => {
       const pkBytes = pks.map((pk) => [...pk.toBytes()]);
       const data = new Uint8Array(pkBytes.flat());
-      if (access_list_pk) {
-      } else {
-        const newAccount = Keypair.generate();
-        SystemProgram.createAccount({
-          fromPubkey: signerAccount.publicKey,
-          newAccountPubkey: newAccount.publicKey,
-          lamports: 10000000,
-          space: 1024,
-          programId,
-        });
-        SystemProgram.
-      }
+      const newAccount = Keypair.generate();
+      const tx = SystemProgram.createAccount({
+        fromPubkey: signerAccount.publicKey,
+        newAccountPubkey: newAccount.publicKey,
+        lamports: 10000000,
+        space: 1024,
+        programId,
+      });
+      return { newAccount, tx };
     },
     sendTxs: async (
       instructions: TransactionInstruction[],

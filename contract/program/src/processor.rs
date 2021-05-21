@@ -1,6 +1,7 @@
 //! Program state processor
 use solana_pam_shared::instructions::{
-    unpack_user_access_list, ProgInstruction, ProgramData, UserAccessList,
+    unpack_user_access_list, user_access_list_add_pk, user_access_list_remove_pk, ProgInstruction,
+    ProgramData, UserAccessList,
 };
 use std::ops::DerefMut;
 use std::rc::Rc;
@@ -13,7 +14,21 @@ use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
 };
-use std::str::from_utf8;
+
+fn process_change_access_list_account(
+    program_account: &AccountInfo,
+    access_list_account: &AccountInfo,
+    pk: Pubkey,
+    add: bool,
+) -> ProgramResult {
+    let mut access_list_data = access_list_account.data.borrow_mut();
+    let access_list = unpack_user_access_list(access_list_data.deref_mut()).unwrap();
+    if add {
+        user_access_list_add_pk(access_list, pk)
+    } else {
+        user_access_list_remove_pk(access_list, pk)
+    }
+}
 
 fn process_update_access_list(
     program_account: &AccountInfo,
@@ -67,7 +82,15 @@ pub fn process_instruction(
                 Err(ProgramError::Custom(111))
             }
         }
-        ProgInstruction::Init => process_init(),
+        ProgInstruction::Init => process_init(program_account),
+        ProgInstruction::AddPKToAccessListAccount(add) => {
+            let update = next_account_info(account_info_iter)?;
+            process_change_access_list_account(program_account, update, add, true)
+        }
+        ProgInstruction::RemovePKToAccessListAccount(remove) => {
+            let update = next_account_info(account_info_iter)?;
+            process_change_access_list_account(program_account, update, remove, false)
+        }
     }
     // let memo = from_utf8(input).map_err(|err| {
     //     msg!("Invalid UTF-8, from byte {}", err.valid_up_to());
