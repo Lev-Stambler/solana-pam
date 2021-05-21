@@ -1,8 +1,7 @@
 //! Instruction types
 use borsh::maybestd::collections::HashMap;
-use borsh::{BorshSerialize, BorshDeserialize};
+use borsh::{BorshDeserialize, BorshSerialize};
 use core::mem::transmute;
-use hex_slice::AsHex;
 use solana_program::{entrypoint::ProgramResult, msg, program_error::ProgramError, pubkey::Pubkey};
 use std::convert::TryInto;
 
@@ -15,6 +14,11 @@ pub struct ProgramData {
 }
 
 impl ProgramData {
+    pub fn init() -> Self {
+        ProgramData {
+            user_access_lists: HashMap::new(),
+        }
+    }
     pub fn update(&mut self, user: &Pubkey, new_access_list_account: &Pubkey) -> ProgramResult {
         self.user_access_lists
             .insert(user.to_bytes(), new_access_list_account.to_bytes());

@@ -1,6 +1,11 @@
 //! Program state processor
-use crate::instruction::{unpack_user_access_list, ProgInstruction, UserAccessList};
+use solana_pam_shared::instructions::{
+    unpack_user_access_list, ProgInstruction, ProgramData, UserAccessList,
+};
+use std::ops::DerefMut;
+use std::rc::Rc;
 
+use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
@@ -12,14 +17,22 @@ use std::str::from_utf8;
 
 fn process_update_access_list(
     program_account: &AccountInfo,
-    access_list_data: &mut [u8],
+    access_list_account: &AccountInfo,
     signer: &Pubkey,
 ) -> ProgramResult {
-    unpack_user_access_list(access_list_data);
-    Ok(())
+    let mut program_data = program_account.data.borrow_mut();
+    let mut prog_data = ProgramData::try_from_slice(&program_data.deref_mut()).unwrap();
+    let mut access_list_data = access_list_account.data.borrow_mut();
+    let access_list = unpack_user_access_list(access_list_data.deref_mut()).unwrap();
+    msg!("New Access List: {:?}", access_list);
+    prog_data.update(signer, access_list_account.key)
 }
 
-fn process_init() -> ProgramResult {
+fn process_init(program_account: &AccountInfo) -> ProgramResult {
+    program_account
+        .data
+        .borrow_mut()
+        .copy_from_slice(&ProgramData::init().try_to_vec().unwrap());
     Ok(())
 }
 
@@ -32,6 +45,7 @@ pub fn process_instruction(
     let account_info_iter = &mut accounts.iter();
     let mut missing_required_signature = false;
     let program_account = next_account_info(account_info_iter)?;
+    let x = program_account;
     // for account_info in account_info_iter {
     //     if let Some(address) = account_info.signer_key() {
     //         msg!("Signed by {:?}", address);
@@ -48,8 +62,7 @@ pub fn process_instruction(
         ProgInstruction::UpdateAccessList => {
             let update = next_account_info(account_info_iter)?;
             if let Some(address) = &update.signer_key() {
-                let access_list_data = update.data.into_inner();
-                process_update_access_list(program_account, access_list_data, address)
+                process_update_access_list(program_account, update, address)
             } else {
                 Err(ProgramError::Custom(111))
             }
