@@ -10,17 +10,17 @@ use std::str::FromStr;
 pub type UserAccessList = Vec<Pubkey>;
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ProgramData {
-    pub user_access_lists: HashMap<[u8; 32], [u8; 32]>,
+    pub user_access_map: HashMap<[u8; 32], [u8; 32]>,
 }
 
 impl ProgramData {
     pub fn init() -> Self {
         ProgramData {
-            user_access_lists: HashMap::new(),
+            user_access_map: HashMap::new(),
         }
     }
     pub fn update(&mut self, user: &Pubkey, new_access_list_account: &Pubkey) -> ProgramResult {
-        self.user_access_lists
+        self.user_access_map
             .insert(user.to_bytes(), new_access_list_account.to_bytes());
         Ok(())
     }
@@ -38,6 +38,8 @@ pub enum ProgInstruction {
     /// new_access_list - an account with the caller's updated access list
     UpdateAccessList,
     // TODO: bulk operations
+    // TODO: make it work s.t. Add and Remove are only callable if the 2nd account is signed and its
+    // signed by the contract owner s.t. user_access_map shows that (signer) => access_list.key()
     AddPKToAccessListAccount(Pubkey),
     RemovePKToAccessListAccount(Pubkey),
 }
