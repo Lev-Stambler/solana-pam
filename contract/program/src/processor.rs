@@ -1,9 +1,9 @@
 //! Program state processor
 use solana_pam_shared::instructions::{
-    unpack_user_access_list, user_access_list_add_pk, user_access_list_remove_pk, ProgInstruction,
-    ProgramData, UserAccessList,
+    pack_user_access_list, unpack_user_access_list, user_access_list_add_pk,
+    user_access_list_remove_pk, ProgInstruction, ProgramData, UserAccessList,
 };
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -30,25 +30,59 @@ fn process_change_access_list_account(
     }
 }
 
-fn process_update_access_list(
-    program_account: &AccountInfo,
+fn process_init_access_list(
+    mut program_data: ProgramData,
     access_list_account: &AccountInfo,
     signer: &Pubkey,
 ) -> ProgramResult {
-    let mut program_data = program_account.data.borrow_mut();
-    let mut prog_data = ProgramData::try_from_slice(&program_data.deref_mut()).unwrap();
     let mut access_list_data = access_list_account.data.borrow_mut();
-    let access_list = unpack_user_access_list(access_list_data.deref_mut()).unwrap();
-    msg!("New Access List: {:?}", access_list);
-    prog_data.update(signer, access_list_account.key)
+    let data = access_list_data.deref_mut();
+    data.clone_from_slice(pack_user_access_list(Vec::new()).as_slice());
+    // let access_list = unpack_user_access_list(access_list_data.deref_mut()).unwrap();
+    // msg!("New Access List: {:?}", access_list);
+    program_data
+        .user_access_map
+        .insert(signer.to_bytes(), access_list_account.key.to_bytes());
+    Ok(())
 }
 
-fn process_init(program_account: &AccountInfo) -> ProgramResult {
-    program_account
-        .data
-        .borrow_mut()
-        .copy_from_slice(&ProgramData::init().try_to_vec().unwrap());
+fn process_init(mut program_account: &AccountInfo) -> ProgramResult {
+    msg!("PROCESSING INIT");
+    let mut new_state = ProgramData::new();
+    msg!("PROCESSING INIT 2");
+    let new_state_vec = &new_state.try_to_vec().map_err(|e| {
+        msg!("{}", e.to_string());
+        e
+    })?;
+    msg!("PROCESSING INIT 2.5");
+    program_account.try_borrow_mut_data()?.copy_from_slice(new_state_vec);
+    msg!("PROCESSING INIT 3");
     Ok(())
+}
+
+fn get_user_access_list_pk<'a>(
+    address: &Pubkey,
+    program_data: &'a ProgramData,
+) -> Option<&'a [u8; 32]> {
+    program_data.user_access_map.get(&address.to_bytes())
+}
+
+fn user_matches_access_list<'a>(
+    access_list: &Pubkey,
+    user: &Pubkey,
+    program_data: ProgramData,
+) -> bool {
+    if let Some(access_list_from_prog) = get_user_access_list_pk(user, &program_data) {
+        if access_list
+            .to_bytes()
+            .iter()
+            .zip(access_list_from_prog)
+            .all(|(a, b)| a == b)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// Instruction processor
@@ -60,7 +94,6 @@ pub fn process_instruction(
     let account_info_iter = &mut accounts.iter();
     let mut missing_required_signature = false;
     let program_account = next_account_info(account_info_iter)?;
-    let x = program_account;
     // for account_info in account_info_iter {
     //     if let Some(address) = account_info.signer_key() {
     //         msg!("Signed by {:?}", address);
@@ -73,23 +106,45 @@ pub fn process_instruction(
     }
 
     let instr = ProgInstruction::unpack(input)?;
+    if instr == ProgInstruction::Init {
+        return process_init(program_account);
+    }
+    let program_data =
+        ProgramData::try_from_slice(program_account.try_borrow_data()?.as_ref()).unwrap();
+
     match instr {
-        ProgInstruction::UpdateAccessList => {
+        ProgInstruction::InitAccessList => {
             let update = next_account_info(account_info_iter)?;
             if let Some(address) = &update.signer_key() {
-                process_update_access_list(program_account, update, address)
+                process_init_access_list(program_data, update, address)
             } else {
                 Err(ProgramError::Custom(111))
             }
         }
-        ProgInstruction::Init => process_init(program_account),
+        ProgInstruction::Init => panic!("SHOULD NOT GET HERE"),
         ProgInstruction::AddPKToAccessListAccount(add) => {
             let update = next_account_info(account_info_iter)?;
-            process_change_access_list_account(program_account, update, add, true)
+            if let Some(address) = update.signer_key() {
+                if user_matches_access_list(&update.key, address, program_data) {
+                    process_change_access_list_account(program_account, update, add, true)
+                } else {
+                    Err(ProgramError::Custom(112))
+                }
+            } else {
+                Err(ProgramError::Custom(111))
+            }
         }
         ProgInstruction::RemovePKToAccessListAccount(remove) => {
             let update = next_account_info(account_info_iter)?;
-            process_change_access_list_account(program_account, update, remove, false)
+            if let Some(address) = update.signer_key() {
+                if user_matches_access_list(&update.key, address, program_data) {
+                    process_change_access_list_account(program_account, update, remove, false)
+                } else {
+                    Err(ProgramError::Custom(112))
+                }
+            } else {
+                Err(ProgramError::Custom(111))
+            }
         }
     }
     // let memo = from_utf8(input).map_err(|err| {

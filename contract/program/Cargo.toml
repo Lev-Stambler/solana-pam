@@ -1,5 +1,5 @@
 [package]
-name = "contract-pam"
+name = "contract-pam-2"
 version = "3.0.1"
 description = "Solana Program Library Memo"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]

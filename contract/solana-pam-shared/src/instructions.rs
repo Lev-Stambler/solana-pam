@@ -14,7 +14,7 @@ pub struct ProgramData {
 }
 
 impl ProgramData {
-    pub fn init() -> Self {
+    pub fn new() -> Self {
         ProgramData {
             user_access_map: HashMap::new(),
         }
@@ -36,10 +36,8 @@ pub enum ProgInstruction {
     /// Accounts expected
     /// program_account (W) - program state account
     /// new_access_list - an account with the caller's updated access list
-    UpdateAccessList,
+    InitAccessList,
     // TODO: bulk operations
-    // TODO: make it work s.t. Add and Remove are only callable if the 2nd account is signed and its
-    // signed by the contract owner s.t. user_access_map shows that (signer) => access_list.key()
     AddPKToAccessListAccount(Pubkey),
     RemovePKToAccessListAccount(Pubkey),
 }
@@ -48,7 +46,7 @@ impl ProgInstruction {
     pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
         match input[0] {
             0 => Ok(ProgInstruction::Init),
-            1 => Ok(ProgInstruction::UpdateAccessList),
+            1 => Ok(ProgInstruction::InitAccessList),
             2 => {
                 let pk = &input[1..33];
                 Ok(ProgInstruction::AddPKToAccessListAccount(

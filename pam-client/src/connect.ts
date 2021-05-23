@@ -10,7 +10,7 @@ import {
 } from "@solana/web3.js";
 //@ts-ignore
 import bs58 from "bs58";
-const progKey = "Bn1E3nNvUbPtA9hTVj3GrnLyQMEAvdX1Ld9yNUVDNtub";
+const progKey = "8wmMgLo9xBGUKai7eWxF2ziVNVFagGX9bWDgntbx4ifL";
 const progId = new PublicKey(progKey);
 // import { serializePubkey, trimBuffer } from "../src/utils/utils";
 
@@ -22,32 +22,36 @@ export let connection: Connection;
 export const configs = {
   data_account,
   userAccount,
-  progId
-}
+  progId,
+};
 
-async function initDataAccount() {
-  const createAccountTransaction = SystemProgram.createAccount({
+export async function initAccount(account: Keypair) {
+  const tx = SystemProgram.createAccount({
     fromPubkey: userAccount.publicKey,
-    newAccountPubkey: data_account.publicKey,
-    lamports: 1000000000,
-    space: 1024 * 1024, // this is like bytes, wholly poop, so this is 1 meg
+    newAccountPubkey: account.publicKey,
+    lamports: 10000000,
+    space: 1024 * 100,
     programId: progId,
   });
   try {
     await sendAndConfirmTransaction(
       connection,
-      new Transaction().add(createAccountTransaction),
-      [userAccount, data_account],
+      new Transaction().add(tx),
+      [userAccount, account],
       {
         skipPreflight: true,
         commitment: "singleGossip",
       }
     );
-    console.log("Data account init");
   } catch (e) {
     console.error(e);
-    throw "Failed to initDataAccount";
+    throw "Failed to init account";
   }
+}
+
+async function initDataAccount() {
+  await initAccount(data_account);
+  console.log("Data account init");
 }
 
 export async function initAccounts(): Promise<Connection> {

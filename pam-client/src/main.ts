@@ -1,12 +1,18 @@
-import { configs, connection, initAccounts } from "./connect";
+import { Keypair } from "@solana/web3.js";
+import { configs, connection, initAccount, initAccounts } from "./connect";
 import { getContract } from "./contract";
 async function main() {
   await initAccounts();
   const contract = getContract(connection, configs.progId, configs.userAccount);
-  const tx = contract.initSwapTx(configs.data_account.publicKey);
-  console.log(tx)
-  const ret = await contract.sendTxs([tx]);
-  console.log(ret)
+  const txInit = contract.initProgDataTx(configs.data_account.publicKey);
+  const accessList = Keypair.generate();
+  await initAccount(accessList);
+  const initAccessListTx = contract.initAccessListTx(
+    configs.data_account.publicKey,
+    accessList.publicKey
+  );
+  const ret = await contract.sendTxs([txInit], [configs.data_account]);
+  console.log(ret);
 }
 
 main()

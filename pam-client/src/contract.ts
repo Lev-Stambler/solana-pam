@@ -11,7 +11,7 @@ import {
 
 enum Instruction {
   init = 0,
-  updateAccessList = 1,
+  initAccessList = 1,
   addToAccessList = 2,
   removeToAccessList = 2,
 }
@@ -25,9 +25,9 @@ export const getContract = (
   signerAccount: Signer
 ) => {
   return {
-    initSwapTx: (progDataAccount: PublicKey) => {
+    initProgDataTx: (progDataAccount: PublicKey) => {
       const keys = [
-        { pubkey: progDataAccount, isSigner: false, isWritable: true },
+        { pubkey: progDataAccount, isSigner: true, isWritable: true },
       ];
       return new TransactionInstruction({
         keys,
@@ -79,7 +79,7 @@ export const getContract = (
         data: instrData(Instruction.addToAccessList, [...add.toBytes()]),
       });
     },
-    updateAccessListTx: (
+    initAccessListTx: (
       progDataAccount: PublicKey,
       newAccessListAccount: PublicKey
     ) => {
@@ -93,11 +93,11 @@ export const getContract = (
           {
             pubkey: newAccessListAccount,
             isSigner: true,
-            isWritable: false,
+            isWritable: true,
           },
         ],
         programId,
-        data: instrData(Instruction.updateAccessList),
+        data: instrData(Instruction.initAccessList),
       });
     },
     // TODO: change to init access list account
